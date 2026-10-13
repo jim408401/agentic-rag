@@ -1,0 +1,25 @@
+{"id": "q001", "question": "到職滿三年半可以有幾天特休？", "reference_answer": "滿三年未滿五年者，每年 14 日特別休假。", "expected_doc_ids": ["HR-001"], "type": "fact", "phase": 1}
+{"id": "q002", "question": "今年的特休沒休完可以留到明年嗎？", "reference_answer": "可以申請遞延至次一年度，遞延上限 5 日；未遞延的部分於次年 1 月底前折算工資發給。", "expected_doc_ids": ["HR-001"], "type": "fact", "phase": 1}
+{"id": "q003", "question": "病假連續請幾天要附醫生證明？", "reference_answer": "連續請病假 3 日以上者，應檢附醫療院所證明。", "expected_doc_ids": ["HR-001"], "type": "fact", "phase": 1}
+{"id": "q004", "question": "我要請 5 天假需要誰簽核？", "reference_answer": "需直屬主管核准，因達 3 日以上，須再經部門主管核准（10 日以上才需人資主管）。", "expected_doc_ids": ["HR-001"], "type": "fact", "phase": 1}
+{"id": "q005", "question": "祖母過世可以請幾天喪假？", "reference_answer": "祖父母喪亡者，給予喪假 6 日。", "expected_doc_ids": ["HR-001"], "type": "fact", "phase": 1}
+{"id": "q006", "question": "去台北出差住宿一晚最多可以報多少？", "reference_answer": "台北市、新北市住宿上限每晚 3,200 元。", "expected_doc_ids": ["FIN-002"], "type": "fact", "phase": 1}
+{"id": "q007", "question": "我是專員，坐高鐵去高雄可以坐商務車廂嗎？", "reference_answer": "原則上限標準車廂；經理級以上或單程車程超過 3 小時者才可搭商務車廂。台北到高雄高鐵通常不到 3 小時，因此專員不可。", "expected_doc_ids": ["FIN-002"], "type": "reasoning", "phase": 1}
+{"id": "q008", "question": "自己開車出差油錢怎麼算？", "reference_answer": "每公里新台幣 4 元，停車費及過路費實報實銷。", "expected_doc_ids": ["FIN-002"], "type": "fact", "phase": 1}
+{"id": "q009", "question": "發票要打哪個統編？", "reference_answer": "本公司統一編號 24681357。", "expected_doc_ids": ["FIN-002"], "type": "fact", "phase": 1}
+{"id": "q010", "question": "請客戶吃飯花了 6000 元需要先核准嗎？", "reference_answer": "交際費單筆超過 5,000 元應事先經部門主管核准。", "expected_doc_ids": ["FIN-002"], "type": "fact", "phase": 1}
+{"id": "q011", "question": "密碼多久要換一次？", "reference_answer": "每 180 天須更換一次，且不得與前 5 次密碼相同。", "expected_doc_ids": ["IT-003"], "type": "fact", "phase": 1}
+{"id": "q012", "question": "可以把客戶合約貼到 ChatGPT 請它摘要嗎？", "reference_answer": "不行。合約屬限閱等級，禁止輸入外部生成式 AI；公司地端 AI 助理可處理限閱以下資料。", "expected_doc_ids": ["IT-003"], "type": "reasoning", "phase": 1}
+{"id": "q013", "question": "筆電掉了要怎麼辦？", "reference_answer": "1 小時內通報 IT 服務台（分機 5566 或 security@example.com），並於 24 小時內向警察機關報案。", "expected_doc_ids": ["IT-003"], "type": "fact", "phase": 1}
+{"id": "q014", "question": "金卡客戶的退貨期限是幾天？運費誰付？", "reference_answer": "金卡客戶 15 日，退貨運費由公司負擔。", "expected_doc_ids": ["CS-004"], "type": "fact", "phase": 1}
+{"id": "q015", "question": "防毒軟體授權可以退嗎？", "reference_answer": "軟體授權類商品一經啟用序號，不得退貨。", "expected_doc_ids": ["CS-004"], "type": "fact", "phase": 1}
+{"id": "q016", "question": "退款 8 萬元需要誰核准？", "reference_answer": "超過 50,000 元須經客服主管核准（超過 200,000 元才需再經財務長）。", "expected_doc_ids": ["CS-004"], "type": "fact", "phase": 1}
+{"id": "q017", "question": "要買 50 萬的伺服器需要幾家報價、誰核准？", "reference_answer": "300,000 元至未滿 1,000,000 元需至少 3 家報價，部門主管、採購主管並加簽財務長；且資訊設備須先經資訊部確認規格。", "expected_doc_ids": ["PUR-005"], "type": "multi", "phase": 1}
+{"id": "q018", "question": "供應商評鑑幾分以下會被停止往來？", "reference_answer": "連續兩年評分未達 70 分者停止往來。", "expected_doc_ids": ["PUR-005"], "type": "fact", "phase": 1}
+{"id": "q019", "question": "出國出差要多早申請？可以預支多少？", "reference_answer": "出發前 14 個工作日申請，經部門主管及財務長核准；預支上限為預估費用之 80%。", "expected_doc_ids": ["FIN-002"], "type": "multi", "phase": 1}
+{"id": "q020", "question": "員工生日禮金是多少？", "reference_answer": "文件中沒有相關規定。", "expected_doc_ids": [], "type": "unanswerable", "phase": 1}
+{"id": "q021", "question": "公司的尾牙在哪一天？", "reference_answer": "文件中沒有相關資訊。", "expected_doc_ids": [], "type": "unanswerable", "phase": 1}
+{"id": "q022", "question": "2023 年的時候特休可以遞延嗎？", "reference_answer": "2023 年版規定不得遞延，一律於次年 1 月底前折算工資；2026 年起的 3.2 版才可遞延至多 5 日。", "expected_doc_ids": ["HR-001-2023", "HR-001"], "type": "version", "phase": 2}
+{"id": "q023", "question": "訂單 SO-2026-0007 目前狀態是什麼？", "reference_answer": "已出貨（2026-09-02 出貨，尚未送達）。", "expected_doc_ids": [], "type": "sql", "phase": 3}
+{"id": "q024", "question": "宏遠科技 2026 年的營收總額是多少？", "reference_answer": "只計已出貨、已送達訂單：SO-2026-0001 429,000 + SO-2026-0004 61,900 + SO-2026-0011 95,700 = 586,600 元。", "expected_doc_ids": [], "type": "sql", "phase": 3}
+{"id": "q025", "question": "海晴貿易的訂單 SO-2026-0008 是 9/12 送達，到 9/25 還能退貨嗎？", "reference_answer": "海晴貿易為金卡客戶，退貨期限 15 日，9/12 起算至 9/27，因此 9/25 仍可退貨，運費由公司負擔。", "expected_doc_ids": ["CS-004"], "type": "sql+doc", "phase": 3}

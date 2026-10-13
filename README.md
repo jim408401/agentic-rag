@@ -1,0 +1,90 @@
+# agentic-rag
+
+從最基本的 RAG 一步步做到 Agentic RAG 的個人學習專案。資料模擬公司內部繁雜的規章手冊與客戶訂單資料庫，所有元件都在地端執行。
+
+完整規劃見 [企業級 Agentic RAG 實作規劃](https://claude.ai/code/artifact/ffd79fe3-ef92-4875-b4ea-c402192df463)。
+
+## 目前進度
+
+| 階段 | 內容 | 狀態 |
+| --- | --- | --- |
+| Phase 0 | 評估集 `eval/golden.jsonl`（25 題，含無答案題、版本題、SQL 題） | 完成 |
+| Phase 1 | Naive RAG：Markdown 匯入、標題分節 + 固定長度切塊、pgvector 向量檢索、帶引用的生成、FastAPI、CLI、評估腳本 | 完成 |
+| Phase 2 | Hybrid（BM25 + RRF）、Reranker、Query Rewriting、Semantic / Parent-Child Chunking、RAGAS | 待做 |
+| Phase 3 | LangGraph Agent：路由、文件檢索工具、Text-to-SQL（`sales` schema）、API 工具 | 待做 |
+| Phase 4 | Langfuse 觀測、權限、Prompt Injection 防護、CI 評估回歸 | 待做 |
+
+## 技術選型（全地端）
+
+| 元件 | 選擇 | 理由 |
+| --- | --- | --- |
+| 資料庫 | PostgreSQL 17 + pgvector | 向量、全文檢索、業務資料、權限（RLS）都在同一套系統，學一套就夠；百萬級 chunk 內效能足夠 |
+| LLM | Ollama + `qwen2.5:7b` | 繁體中文表現穩定、支援 tool calling，筆電也跑得動 |
+| Embedding | Ollama + `bge-m3` | 多語、1024 維，中文檢索效果好 |
+| API | FastAPI | — |
+| 套件管理 | uv | — |
+
+## 快速開始
+
+需要 Docker 與 [uv](https://docs.astral.sh/uv/)。
+
+```bash
+cp .env.example .env
+docker compose up -d                       # 啟動 Postgres(pgvector) 與 Ollama
+docker compose exec ollama ollama pull bge-m3
+docker compose exec ollama ollama pull qwen2.5:7b
+
+uv sync                                    # 安裝相依套件
+uv run rag ingest data/handbook            # 匯入規章手冊
+uv run rag ask "到職滿三年半有幾天特休？"
+uv run rag ask "特休可以遞延嗎？" --current-only   # 只查現行版本
+uv run rag eval --name baseline            # 跑評估，結果寫到 eval/results/
+
+uv run uvicorn agentic_rag.api.main:app --reload   # http://localhost:8000/docs
+```
+
+記憶體不足 16 GB 時，把 `.env` 的 `RAG_LLM_MODEL` 改成 `qwen2.5:3b`。
+
+## 測試
+
+```bash
+uv run pytest                  # 單元測試，不需要 Docker 與模型
+uv run pytest -m postgres      # 需要 docker compose up -d postgres
+uv run pytest -m ollama        # 端到端，需要 Ollama 與已下載的模型
+uv run ruff check .
+```
+
+單元測試用 `tests/conftest.py` 裡的假 embedding（中文字 bigram 雜湊）與假 LLM，因此在 CI 上不用下載任何模型。
+
+## 專案結構
+
+```
+src/agentic_rag/
+  config.py          所有可調參數（RAG_ 開頭的環境變數）
+  llm.py             ChatModel / Embedder 介面與 Ollama 實作
+  ingestion/         讀檔（含 front matter metadata）、切塊、匯入管線
+  store/             VectorStore 介面、記憶體版與 pgvector 版
+  retrieval/         Retriever 介面（Phase 2 在這裡加 Hybrid 與 Reranker）
+  generation/        Prompt 與引用格式
+  rag.py             檢索 + 生成主流程
+  evaluation/        指標與評估執行器
+  api/               FastAPI
+  cli.py             rag ingest / ask / eval
+data/handbook/       模擬規章（含一份已廢止的舊版，用來練習版本過濾）
+db/init/             pgvector 資料表與 sales 訂單資料庫（含種子資料）
+eval/golden.jsonl    評估集
+```
+
+## 模擬資料
+
+- **規章手冊**：請假（含 2023 舊版）、差旅報支、資訊安全、客戶退換貨、採購，每份有 `doc_id`、版本、生效日、狀態、權限群組等 front matter。
+- **訂單資料庫**：`sales` schema 下的客戶、商品、訂單、訂單明細。退換貨規範中的退貨期限依客戶等級而定，Phase 3 的 Agent 需要同時查文件與 SQL 才能回答「這張訂單還能不能退」。
+
+## 評估集題型
+
+| 題型 | 說明 | 階段 |
+| --- | --- | --- |
+| fact / multi / reasoning | 單一事實、多個條件、需要推論 | 1 |
+| unanswerable | 文件中沒有答案，應回覆「查無相關規定」 | 1 |
+| version | 需區分現行版與廢止版 | 2 |
+| sql / sql+doc | 需要查訂單資料庫，或同時查文件與資料庫 | 3 |
