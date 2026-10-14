@@ -3,6 +3,8 @@
 其餘程式碼只依賴 Protocol，之後要換成 vLLM、llama.cpp 或雲端 API，只需新增一個實作。
 """
 
+import json
+from collections.abc import Callable
 from typing import Protocol
 from urllib.parse import urlparse
 
@@ -50,8 +52,13 @@ def check_ollama(settings: Settings, models: list[str]) -> None:
         )
 
 
+TokenCallback = Callable[[str], None]
+
+
 class ChatModel(Protocol):
-    def chat(self, messages: list[dict[str, str]]) -> str: ...
+    def chat(
+        self, messages: list[dict[str, str]], on_token: TokenCallback | None = None
+    ) -> str: ...
 
 
 class Embedder(Protocol):
@@ -60,28 +67,58 @@ class Embedder(Protocol):
     def embed(self, texts: list[str]) -> list[list[float]]: ...
 
 
+def _timeout(settings: Settings) -> httpx.Timeout:
+    # 連線 5 秒就該成功；讀取要等模型載入與計算，CPU 上可能要好幾分鐘
+    return httpx.Timeout(settings.request_timeout, connect=5)
+
+
 class OllamaChat:
     def __init__(self, settings: Settings, client: httpx.Client | None = None):
         self.model = settings.llm_model
         self.temperature = settings.llm_temperature
+        self.think = settings.llm_think
+        self.timeout_s = settings.request_timeout
         self._client = client or httpx.Client(
             base_url=settings.ollama_url,
-            timeout=settings.request_timeout,
+            timeout=_timeout(settings),
             trust_env=use_env_proxy(settings.ollama_url),
         )
 
-    def chat(self, messages: list[dict[str, str]]) -> str:
-        resp = self._client.post(
-            "/api/chat",
-            json={
-                "model": self.model,
-                "messages": messages,
-                "stream": False,
-                "options": {"temperature": self.temperature},
-            },
-        )
-        resp.raise_for_status()
-        return resp.json()["message"]["content"]
+    def chat(self, messages: list[dict[str, str]], on_token: TokenCallback | None = None) -> str:
+        """以串流方式生成：每收到一段文字就呼叫 on_token，讓使用者不必乾等整段答案。"""
+        payload = {
+            "model": self.model,
+            "messages": messages,
+            "stream": True,
+            "options": {"temperature": self.temperature},
+        }
+        if self.think is not None:
+            payload["think"] = self.think
+        parts: list[str] = []
+        try:
+            with self._client.stream("POST", "/api/chat", json=payload) as resp:
+                resp.raise_for_status()
+                for line in resp.iter_lines():
+                    if not line:
+                        continue
+                    event = json.loads(line)
+                    if "error" in event:
+                        raise ServiceUnavailable(f"Ollama 回傳錯誤：{event['error']}")
+                    # 思考內容在 message.thinking，不算進答案
+                    token = event.get("message", {}).get("content", "")
+                    if token:
+                        parts.append(token)
+                        if on_token:
+                            on_token(token)
+                    if event.get("done"):
+                        break
+        except httpx.TimeoutException as exc:
+            raise ServiceUnavailable(
+                f"模型 {self.model} 超過 {self.timeout_s:.0f} 秒沒有回應，多半是在 CPU 上執行太慢。"
+                "可以在 .env 調高 RAG_REQUEST_TIMEOUT、改用更小的 RAG_LLM_MODEL，"
+                "或讓 Ollama 使用 GPU。"
+            ) from exc
+        return "".join(parts)
 
 
 class OllamaEmbedder:
@@ -93,7 +130,7 @@ class OllamaEmbedder:
         self.batch_size = batch_size
         self._client = client or httpx.Client(
             base_url=settings.ollama_url,
-            timeout=settings.request_timeout,
+            timeout=_timeout(settings),
             trust_env=use_env_proxy(settings.ollama_url),
         )
 

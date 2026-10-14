@@ -40,8 +40,10 @@ class EchoChat:
         self.reply = reply
         self.calls: list[list[dict[str, str]]] = []
 
-    def chat(self, messages: list[dict[str, str]]) -> str:
+    def chat(self, messages: list[dict[str, str]], on_token=None) -> str:
         self.calls.append(messages)
+        if on_token:
+            on_token(self.reply)
         return self.reply
 
 
