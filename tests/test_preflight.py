@@ -23,14 +23,14 @@ def fake_tags(monkeypatch, names: list[str]) -> None:
 
 
 def test_check_ollama_accepts_installed_models(monkeypatch):
-    fake_tags(monkeypatch, ["bge-m3:latest", "qwen2.5:7b"])
-    check_ollama(Settings(), ["bge-m3", "qwen2.5:7b"])
+    fake_tags(monkeypatch, ["bge-m3:latest", "qwen3.5:0.8b"])
+    check_ollama(Settings(), ["bge-m3", "qwen3.5:0.8b"])
 
 
 def test_check_ollama_reports_missing_model(monkeypatch):
     fake_tags(monkeypatch, ["bge-m3:latest"])
-    with pytest.raises(ServiceUnavailable, match="ollama pull qwen2.5:7b"):
-        check_ollama(Settings(), ["bge-m3", "qwen2.5:7b"])
+    with pytest.raises(ServiceUnavailable, match="ollama pull qwen3.5:0.8b"):
+        check_ollama(Settings(), ["bge-m3", "qwen3.5:0.8b"])
 
 
 def test_check_ollama_reports_connection_error(monkeypatch):

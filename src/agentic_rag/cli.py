@@ -64,9 +64,18 @@ def ask(
     current_only: bool = typer.Option(False, "--current-only", help="只查現行版本的文件"),
 ) -> None:
     """問一個問題，印出答案與引用來源。"""
+    from agentic_rag.llm import ServiceUnavailable
+
     filters = {"status": "現行"} if current_only else None
-    answer = _pipeline_or_exit().ask(question, filters)
-    console.print(f"\n[bold]答案[/bold]\n{answer.text}\n")
+    pipeline = _pipeline_or_exit()
+    console.print("[dim]檢索完成，模型生成中（第一次需要載入模型，可能較久）…[/dim]")
+    console.print("\n[bold]答案[/bold]")
+    try:
+        answer = pipeline.ask(question, filters, on_token=lambda t: print(t, end="", flush=True))
+    except ServiceUnavailable as exc:
+        console.print(f"\n[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+    print("\n")
     table = Table("#", "文件", "章節", "分數")
     for i, r in enumerate(answer.sources, start=1):
         table.add_row(
@@ -88,13 +97,19 @@ def run_eval(
     s = get_settings()
     items = load_golden(golden, phase)
     console.print(f"評估 {len(items)} 題，每題完成會印一行…")
-    report = evaluate(
-        _pipeline_or_exit(),
-        items,
-        s.top_k,
-        generate,
-        on_item=lambda r: console.print(f"  {r.id} hit={r.hit} {r.latency_s}s"),
-    )
+    from agentic_rag.llm import ServiceUnavailable
+
+    try:
+        report = evaluate(
+            _pipeline_or_exit(),
+            items,
+            s.top_k,
+            generate,
+            on_item=lambda r: console.print(f"  {r.id} hit={r.hit} {r.latency_s}s"),
+        )
+    except ServiceUnavailable as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
     out = save_report(
         report, Path("eval/results"), name or datetime.now().strftime("%Y%m%d-%H%M%S")
     )

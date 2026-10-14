@@ -19,7 +19,7 @@
 | 元件 | 選擇 | 理由 |
 | --- | --- | --- |
 | 資料庫 | PostgreSQL 17 + pgvector | 向量、全文檢索、業務資料、權限（RLS）都在同一套系統，學一套就夠；百萬級 chunk 內效能足夠 |
-| LLM | Ollama + `qwen2.5:7b` | 繁體中文表現穩定、支援 tool calling，筆電也跑得動 |
+| LLM | Ollama + `qwen3.5:0.8b` | 約 1 GB，沒有顯示卡的筆電也跑得動；有 GPU 時可換 `qwen3.5:4b` 或 `9b` 提升品質 |
 | Embedding | Ollama + `bge-m3` | 多語、1024 維，中文檢索效果好 |
 | API | FastAPI | — |
 | 套件管理 | uv | — |
@@ -32,7 +32,7 @@
 cp .env.example .env
 docker compose up -d                       # 啟動 Postgres(pgvector) 與 Ollama
 docker compose exec ollama ollama pull bge-m3
-docker compose exec ollama ollama pull qwen2.5:7b
+docker compose exec ollama ollama pull qwen3.5:0.8b
 
 uv sync                                    # 安裝相依套件
 uv run rag ingest data/handbook            # 匯入規章手冊
@@ -43,7 +43,7 @@ uv run rag eval --name baseline            # 跑評估，結果寫到 eval/resul
 uv run uvicorn agentic_rag.api.main:app --reload   # http://localhost:8000/docs
 ```
 
-記憶體不足 16 GB 時，把 `.env` 的 `RAG_LLM_MODEL` 改成 `qwen2.5:3b`。
+模型大小在 `.env` 的 `RAG_LLM_MODEL` 調整。0.8B 模型速度快但答案品質有限，評估分數偏低時，可以先換大一點的模型比較看看，再判斷是檢索還是生成的問題。
 
 ## 測試
 
