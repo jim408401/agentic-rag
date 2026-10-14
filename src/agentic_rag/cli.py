@@ -13,18 +13,48 @@ app = typer.Typer(help="Agentic RAG 學習專案的命令列工具", no_args_is_
 console = Console()
 
 
+def _pipeline_or_exit():
+    """組裝 RAG 管線；Ollama、模型或資料庫有問題時印出原因並結束，而不是卡住。"""
+    from agentic_rag.llm import ServiceUnavailable, check_ollama
+    from agentic_rag.rag import build_pipeline
+
+    s = get_settings()
+    try:
+        check_ollama(s, [s.embed_model, s.llm_model])
+        return build_pipeline(s)
+    except ServiceUnavailable as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+
+
 @app.command()
 def ingest(path: Path = typer.Argument(Path("data/handbook"), help="要匯入的資料夾")) -> None:
     """把資料夾內的文件切塊、embedding 後寫入 pgvector。"""
     from agentic_rag.ingestion.pipeline import ingest_directory
-    from agentic_rag.llm import OllamaEmbedder
+    from agentic_rag.llm import OllamaEmbedder, ServiceUnavailable, check_ollama
     from agentic_rag.store.pgvector import PgVectorStore
 
     s = get_settings()
-    store = PgVectorStore(s.database_url)
-    report = ingest_directory(path, OllamaEmbedder(s), store, s.chunk_size, s.chunk_overlap)
+    try:
+        console.print("連線資料庫…")
+        store = PgVectorStore(s.database_url)
+        console.print(f"檢查 Ollama 與模型 {s.embed_model}…")
+        check_ollama(s, [s.embed_model])
+    except ServiceUnavailable as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+
+    console.print("開始匯入（第一份文件需要載入 embedding 模型，會比較久）")
+
+    def progress(i: int, n: int, doc, chunks: int) -> None:
+        console.print(f"  [{i}/{n}] {doc.title}（{doc.doc_id}）：{chunks} 個 chunk")
+
+    report = ingest_directory(
+        path, OllamaEmbedder(s), store, s.chunk_size, s.chunk_overlap, on_progress=progress
+    )
     console.print(
-        f"匯入 {report.documents} 份文件、{report.chunks} 個 chunk；索引內共 {store.count()} 個 chunk"
+        f"完成：匯入 {report.documents} 份文件、{report.chunks} 個 chunk；"
+        f"索引內共 {store.count()} 個 chunk"
     )
 
 
@@ -34,10 +64,8 @@ def ask(
     current_only: bool = typer.Option(False, "--current-only", help="只查現行版本的文件"),
 ) -> None:
     """問一個問題，印出答案與引用來源。"""
-    from agentic_rag.rag import build_pipeline
-
     filters = {"status": "現行"} if current_only else None
-    answer = build_pipeline(get_settings()).ask(question, filters)
+    answer = _pipeline_or_exit().ask(question, filters)
     console.print(f"\n[bold]答案[/bold]\n{answer.text}\n")
     table = Table("#", "文件", "章節", "分數")
     for i, r in enumerate(answer.sources, start=1):
@@ -56,11 +84,17 @@ def run_eval(
 ) -> None:
     """跑評估集，把逐題結果寫到 eval/results/。"""
     from agentic_rag.evaluation.runner import evaluate, load_golden, save_report
-    from agentic_rag.rag import build_pipeline
 
     s = get_settings()
     items = load_golden(golden, phase)
-    report = evaluate(build_pipeline(s), items, s.top_k, generate)
+    console.print(f"評估 {len(items)} 題，每題完成會印一行…")
+    report = evaluate(
+        _pipeline_or_exit(),
+        items,
+        s.top_k,
+        generate,
+        on_item=lambda r: console.print(f"  {r.id} hit={r.hit} {r.latency_s}s"),
+    )
     out = save_report(
         report, Path("eval/results"), name or datetime.now().strftime("%Y%m%d-%H%M%S")
     )

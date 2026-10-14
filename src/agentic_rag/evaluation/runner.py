@@ -2,6 +2,7 @@
 
 import json
 import time
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -53,7 +54,13 @@ def _mean(values: list[float | None]) -> float:
     return round(sum(vals) / len(vals), 4) if vals else 0.0
 
 
-def evaluate(pipeline: RAGPipeline, items: list[GoldenItem], k: int, generate: bool) -> Report:
+def evaluate(
+    pipeline: RAGPipeline,
+    items: list[GoldenItem],
+    k: int,
+    generate: bool,
+    on_item: Callable[[ItemResult], None] | None = None,
+) -> Report:
     results: list[ItemResult] = []
     for item in items:
         start = time.perf_counter()
@@ -78,6 +85,8 @@ def evaluate(pipeline: RAGPipeline, items: list[GoldenItem], k: int, generate: b
             result.refusal_correct = float(refused != answerable)
         result.latency_s = round(time.perf_counter() - start, 3)
         results.append(result)
+        if on_item:
+            on_item(result)
 
     summary = {
         "n": len(results),

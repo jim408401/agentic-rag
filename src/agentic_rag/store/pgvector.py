@@ -8,12 +8,20 @@ from pgvector.psycopg import register_vector
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
+from agentic_rag.llm import ServiceUnavailable
 from agentic_rag.models import Chunk, RetrievedChunk
 
 
 class PgVectorStore:
     def __init__(self, database_url: str):
-        self._conn = psycopg.connect(database_url, autocommit=True, row_factory=dict_row)
+        try:
+            self._conn = psycopg.connect(
+                database_url, autocommit=True, row_factory=dict_row, connect_timeout=5
+            )
+        except psycopg.OperationalError as exc:
+            raise ServiceUnavailable(
+                f"連不上資料庫。請確認 docker compose up -d postgres 已啟動：{exc}"
+            ) from exc
         register_vector(self._conn)
 
     def upsert(self, chunks: list[Chunk], vectors: list[list[float]]) -> None:
