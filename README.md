@@ -8,7 +8,7 @@
 
 | 階段 | 內容 | 狀態 |
 | --- | --- | --- |
-| Phase 0 | 評估集 `eval/golden.jsonl`（25 題，含無答案題、版本題、SQL 題） | 完成 |
+| Phase 0 | 評估集 `eval/golden.jsonl`（29 題，含無答案題、版本題、SQL 題），檢索與答案正確性指標 | 完成 |
 | Phase 1 | Naive RAG：Markdown 匯入、標題分節 + 固定長度切塊、pgvector 向量檢索、帶引用的生成、FastAPI、CLI、評估腳本 | 完成 |
 | Phase 2 | Hybrid（BM25 + RRF）、Reranker、Query Rewriting、Semantic / Parent-Child Chunking、RAGAS | 待做 |
 | Phase 3 | LangGraph Agent：路由、文件檢索工具、Text-to-SQL（`sales` schema）、API 工具 | 待做 |
@@ -78,6 +78,7 @@ eval/golden.jsonl    評估集
 ## 模擬資料
 
 - **規章手冊**：請假（含 2023 舊版）、差旅報支、資訊安全、客戶退換貨、採購，每份有 `doc_id`、版本、生效日、狀態、權限群組等 front matter。
+- **干擾文件**：加班補休、福利補助、帳號權限、公務車。內容和上面的規章用詞相近（補休與特休、喪葬補助與喪假、帳號與密碼、公務車油資與自行開車油資），用來測試檢索會不會抓錯文件。
 - **訂單資料庫**：`sales` schema 下的客戶、商品、訂單、訂單明細。退換貨規範中的退貨期限依客戶等級而定，Phase 3 的 Agent 需要同時查文件與 SQL 才能回答「這張訂單還能不能退」。
 
 ## 評估集題型
@@ -88,3 +89,15 @@ eval/golden.jsonl    評估集
 | unanswerable | 文件中沒有答案，應回覆「查無相關規定」 | 1 |
 | version | 需區分現行版與廢止版 | 2 |
 | sql / sql+doc | 需要查訂單資料庫，或同時查文件與資料庫 | 3 |
+
+## 評估指標
+
+| 指標 | 意義 |
+| --- | --- |
+| hit@k / recall@k | 正確文件有沒有出現在前 k 筆 |
+| mrr | 正確文件排第幾名（第 1 名得 1，第 2 名得 0.5…），Reranker 主要改善這項 |
+| refusal_accuracy | 無答案題有拒答、有答案題沒有亂拒答 |
+| fact_recall | 答案涵蓋了幾成關鍵事實（`must_include`，「\|」分隔同義寫法，比對時忽略空白、逗號與全半形） |
+| citation_rate | 有答案的題目中，答案附上 `[n]` 引用的比例 |
+
+`fact_recall` 是關鍵字比對，便宜又穩定，但可能漏判換句話說的正確答案。Phase 2 會再加上 LLM 評分（RAGAS）互相對照。
