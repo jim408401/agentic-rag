@@ -76,21 +76,26 @@ class PgVectorStore:
             """,
             [vector, *params, vector, k],
         ).fetchall()
-        return [
-            RetrievedChunk(
-                chunk=Chunk(
-                    chunk_id=r["chunk_id"],
-                    doc_id=r["doc_id"],
-                    title=r["title"],
-                    section_path=r["section_path"],
-                    source=r["source"],
-                    content=r["content"],
-                    metadata=r["metadata"],
-                ),
-                score=float(r["score"]),
-            )
-            for r in rows
-        ]
+        return [RetrievedChunk(chunk=_to_chunk(r), score=float(r["score"])) for r in rows]
+
+    def all_chunks(self) -> list[Chunk]:
+        rows = self._conn.execute(
+            "SELECT chunk_id, doc_id, title, section_path, source, content, metadata"
+            " FROM rag_chunks ORDER BY chunk_id"
+        ).fetchall()
+        return [_to_chunk(r) for r in rows]
 
     def count(self) -> int:
         return self._conn.execute("SELECT count(*) AS n FROM rag_chunks").fetchone()["n"]
+
+
+def _to_chunk(row: dict[str, Any]) -> Chunk:
+    return Chunk(
+        chunk_id=row["chunk_id"],
+        doc_id=row["doc_id"],
+        title=row["title"],
+        section_path=row["section_path"],
+        source=row["source"],
+        content=row["content"],
+        metadata=row["metadata"],
+    )

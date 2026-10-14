@@ -39,5 +39,8 @@ class InMemoryVectorStore:
         scored.sort(key=lambda r: r.score, reverse=True)
         return scored[:k]
 
+    def all_chunks(self) -> list[Chunk]:
+        return [chunk for chunk, _ in self._rows.values()]
+
     def count(self) -> int:
         return len(self._rows)
