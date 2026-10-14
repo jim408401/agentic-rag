@@ -134,7 +134,7 @@ def run_eval(
             items,
             generate,
             on_item=lambda r: console.print(
-                f"  {r.id} hit={r.hit} fact={r.fact_recall} {r.latency_s}s"
+                f"  {r.id} hit={r.hit} section={r.section_hit} fact={r.fact_recall} {r.latency_s}s"
             ),
         )
     except ServiceUnavailable as exc:

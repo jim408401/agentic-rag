@@ -28,7 +28,8 @@ def test_ingest_is_idempotent_and_searchable(store):
     assert store.count() == first
 
     retriever = VectorRetriever(embedder, store)
-    assert retriever.retrieve("連續請病假要附證明嗎", k=3)[0].chunk.doc_id == "HR-001"
+    hits = retriever.retrieve("連續請病假要附證明嗎", k=3)
+    assert hits[0].chunk.doc_id.startswith("HR-001")  # 現行版或舊版的請假辦法
     current = retriever.retrieve("特休可以遞延嗎", k=10, filters={"status": "現行"})
     assert current and all(h.chunk.metadata["status"] == "現行" for h in current)
 
