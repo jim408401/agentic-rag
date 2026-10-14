@@ -95,7 +95,7 @@ def test_reranking_retriever_handles_no_candidates():
 
 
 def _tei(handler) -> TEIReranker:
-    settings = Settings(reranker_url="http://localhost:8080")
+    settings = Settings(reranker_url="http://localhost:18080")
     client = httpx.Client(base_url=settings.reranker_url, transport=httpx.MockTransport(handler))
     return TEIReranker(settings, client)
 
@@ -146,7 +146,7 @@ def test_build_retriever_follows_settings(embedder, indexed_store):
     hybrid = build_retriever(Settings(retrieval_mode="hybrid"), embedder, indexed_store)
     assert isinstance(hybrid, HybridRetriever)
     reranked = build_retriever(
-        Settings(retrieval_mode="hybrid", reranker_url="http://localhost:8080"),
+        Settings(retrieval_mode="hybrid", reranker_url="http://localhost:18080"),
         embedder,
         indexed_store,
     )
