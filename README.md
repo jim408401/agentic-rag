@@ -10,7 +10,8 @@
 | --- | --- | --- |
 | Phase 0 | 評估集 `eval/golden.jsonl`（29 題，含無答案題、版本題、SQL 題），檢索與答案正確性指標 | 完成 |
 | Phase 1 | Naive RAG：Markdown 匯入、標題分節 + 固定長度切塊、pgvector 向量檢索、帶引用的生成、FastAPI、CLI、評估腳本 | 完成 |
-| Phase 2 | Hybrid（BM25 + RRF）、Reranker、Query Rewriting、Semantic / Parent-Child Chunking、RAGAS | 待做 |
+| Phase 2 | Hybrid（BM25 + RRF）、Reranker、版本過濾 | 完成 |
+| Phase 2 | Query Rewriting、Semantic / Parent-Child Chunking、RAGAS | 待做 |
 | Phase 3 | LangGraph Agent：路由、文件檢索工具、Text-to-SQL（`sales` schema）、API 工具 | 待做 |
 | Phase 4 | Langfuse 觀測、權限、Prompt Injection 防護、CI 評估回歸 | 待做 |
 
@@ -21,6 +22,8 @@
 | 資料庫 | PostgreSQL 17 + pgvector | 向量、全文檢索、業務資料、權限（RLS）都在同一套系統，學一套就夠；百萬級 chunk 內效能足夠 |
 | LLM | Ollama + `qwen3.5:0.8b` | 約 1 GB，沒有顯示卡的筆電也跑得動；有 GPU 時可換 `qwen3.5:4b` 或 `9b` 提升品質 |
 | Embedding | Ollama + `bge-m3` | 多語、1024 維，中文檢索效果好 |
+| 關鍵字檢索 | BM25（Python，中文以相鄰兩字為詞） | 補足向量檢索對編號、金額、專有名詞不敏感的弱點 |
+| Reranker | TEI + `BAAI/bge-reranker-v2-m3` | 多語 cross-encoder，CPU 可跑；以 Docker 服務提供，選用 |
 | API | FastAPI | — |
 | 套件管理 | uv | — |
 
@@ -37,11 +40,26 @@ docker compose exec ollama ollama pull qwen3.5:0.8b
 uv sync                                    # 安裝相依套件
 uv run rag ingest data/handbook            # 匯入規章手冊
 uv run rag ask "到職滿三年半有幾天特休？"
-uv run rag ask "特休可以遞延嗎？" --current-only   # 只查現行版本
+uv run rag ask "特休可以遞延嗎？" --all-versions   # 連已廢止的舊版也查
 uv run rag eval --name baseline            # 跑評估，結果寫到 eval/results/
 
 uv run uvicorn agentic_rag.api.main:app --reload   # http://localhost:8000/docs
 ```
+
+### 比較不同檢索方式
+
+`ask` 與 `eval` 都可以用參數臨時覆蓋 `.env`，同一份資料比較三種設定：
+
+```bash
+uv run rag eval --phase 2 --mode vector --no-rerank --name vector
+uv run rag eval --phase 2 --mode hybrid --no-rerank --name hybrid
+
+docker compose --profile rerank up -d reranker   # 第一次會下載約 2 GB 模型
+docker compose logs -f reranker                  # 看到 Ready 後再繼續
+uv run rag eval --phase 2 --mode hybrid --rerank --name hybrid-rerank
+```
+
+一般問題預設只查現行版本；問題提到年份（例如「2023 年」）或「舊版、以前」時，才會連已廢止的版本一起查（`src/agentic_rag/retrieval/query.py`）。
 
 模型大小在 `.env` 的 `RAG_LLM_MODEL` 調整。0.8B 模型速度快但答案品質有限，評估分數偏低時，可以先換大一點的模型比較看看，再判斷是檢索還是生成的問題。
 
@@ -64,7 +82,7 @@ src/agentic_rag/
   llm.py             ChatModel / Embedder 介面與 Ollama 實作
   ingestion/         讀檔（含 front matter metadata）、切塊、匯入管線
   store/             VectorStore 介面、記憶體版與 pgvector 版
-  retrieval/         Retriever 介面（Phase 2 在這裡加 Hybrid 與 Reranker）
+  retrieval/         向量、BM25、Hybrid（RRF）、Reranker、版本過濾
   generation/        Prompt 與引用格式
   rag.py             檢索 + 生成主流程
   evaluation/        指標與評估執行器
@@ -96,6 +114,7 @@ eval/golden.jsonl    評估集
 | --- | --- |
 | hit@k / recall@k | 正確文件有沒有出現在前 k 筆 |
 | mrr | 正確文件排第幾名（第 1 名得 1，第 2 名得 0.5…），Reranker 主要改善這項 |
+| obsolete@k | 前 k 筆中來自已廢止文件的比例（版本題不計），越低越好 |
 | refusal_accuracy | 無答案題有拒答、有答案題沒有亂拒答 |
 | fact_recall | 答案涵蓋了幾成關鍵事實（`must_include`，「\|」分隔同義寫法，比對時忽略空白、逗號與全半形） |
 | citation_rate | 有答案的題目中，答案附上 `[n]` 引用的比例 |

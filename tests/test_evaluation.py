@@ -53,10 +53,11 @@ def test_golden_set_matches_handbook():
 
 def test_evaluate_reports_summary(pipeline):
     items = load_golden(ROOT / "eval" / "golden.jsonl", max_phase=1)
-    report = evaluate(pipeline, items, k=5, generate=True)
+    report = evaluate(pipeline, items, generate=True)
     assert report.summary["n"] == len(items)
     assert 0.0 <= report.summary["hit@5"] <= 1.0
     assert "refusal_accuracy" in report.summary
     assert 0.0 <= report.summary["fact_recall"] <= 1.0
     # 假 LLM 固定回「測試答案 [1]」，每題都有引用
     assert report.summary["citation_rate"] == 1.0
+    assert 0.0 <= report.summary["obsolete@5"] <= 1.0

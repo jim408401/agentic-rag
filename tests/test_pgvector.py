@@ -32,6 +32,11 @@ def test_ingest_is_idempotent_and_searchable(store):
     current = retriever.retrieve("特休可以遞延嗎", k=10, filters={"status": "現行"})
     assert current and all(h.chunk.metadata["status"] == "現行" for h in current)
 
+    # BM25 從資料庫讀出全部 chunk 建索引
+    chunks = store.all_chunks()
+    assert len(chunks) == store.count()
+    assert {"HR-001", "FIN-002"} <= {c.doc_id for c in chunks}
+
 
 def test_sales_schema_is_seeded(store):
     row = store._conn.execute(

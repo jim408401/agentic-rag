@@ -15,7 +15,11 @@ app = FastAPI(title="Agentic RAG", version="0.1.0")
 class AskRequest(BaseModel):
     question: str = Field(min_length=1, max_length=2000)
     filters: dict[str, Any] | None = Field(
-        default=None, description='metadata 過濾，例如 {"status": "現行"}'
+        default=None, description='metadata 過濾，例如 {"department": "人力資源部"}'
+    )
+    all_versions: bool = Field(
+        default=False,
+        description="連已廢止的舊版文件也查；預設只查現行版，問題提到年份或舊版時例外",
     )
 
 
@@ -45,7 +49,7 @@ def health() -> dict[str, str]:
 
 @app.post("/ask", response_model=AskResponse)
 def ask(req: AskRequest, pipeline: RAGPipeline = Depends(get_pipeline)) -> AskResponse:
-    answer = pipeline.ask(req.question, req.filters)
+    answer = pipeline.ask(req.question, req.filters, all_versions=req.all_versions)
     return AskResponse(
         answer=answer.text,
         sources=[

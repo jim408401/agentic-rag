@@ -40,6 +40,8 @@ class ItemResult:
     hit: float | None
     recall: float | None
     rr: float | None
+    # 前 k 筆中來自已廢止文件的比例（版本題不計）
+    obsolete: float | None = None
     answer: str | None = None
     refusal_correct: float | None = None
     fact_recall: float | None = None
@@ -68,14 +70,14 @@ def _mean(values: list[float | None]) -> float:
 def evaluate(
     pipeline: RAGPipeline,
     items: list[GoldenItem],
-    k: int,
     generate: bool,
     on_item: Callable[[ItemResult], None] | None = None,
 ) -> Report:
+    k = pipeline.top_k
     results: list[ItemResult] = []
     for item in items:
         start = time.perf_counter()
-        hits = pipeline.retriever.retrieve(item.question, k)
+        hits = pipeline.retrieve(item.question)
         retrieved = [h.chunk.doc_id for h in hits]
         answerable = bool(item.expected_doc_ids)
         result = ItemResult(
@@ -88,8 +90,12 @@ def evaluate(
             recall=recall_at_k(retrieved, item.expected_doc_ids) if answerable else None,
             rr=reciprocal_rank(retrieved, item.expected_doc_ids) if answerable else None,
         )
+        if hits and item.type != "version":
+            result.obsolete = sum(h.chunk.metadata.get("status") == "已廢止" for h in hits) / len(
+                hits
+            )
         if generate:
-            answer = pipeline.ask(item.question)
+            answer = pipeline.generate(item.question, hits)
             result.answer = answer.text
             refused = is_refusal(answer.text, NO_ANSWER)
             # 無答案題應拒答；有答案題不應拒答
@@ -107,6 +113,7 @@ def evaluate(
         f"hit@{k}": _mean([r.hit for r in results]),
         f"recall@{k}": _mean([r.recall for r in results]),
         "mrr": _mean([r.rr for r in results]),
+        f"obsolete@{k}": _mean([r.obsolete for r in results]),
         "avg_latency_s": _mean([r.latency_s for r in results]),
     }
     if generate:

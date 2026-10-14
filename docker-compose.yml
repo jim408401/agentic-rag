@@ -31,6 +31,24 @@ services:
     #           count: all
     #           capabilities: [gpu]
 
+  # Reranker（Phase 2）：Hugging Face Text Embeddings Inference 的 CPU 版
+  # 預設不啟動，需要時執行 docker compose --profile rerank up -d reranker
+  # 第一次啟動會從 Hugging Face 下載約 2 GB 的模型，存在 hf_cache volume
+  reranker:
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.9
+    profiles: ["rerank"]
+    command: ["--model-id", "BAAI/bge-reranker-v2-m3"]
+    ports:
+      - "8080:80"
+    volumes:
+      - hf_cache:/data
+    environment:
+      # 公司網路需透過 proxy 才能下載模型時，沿用主機的設定
+      HTTPS_PROXY: ${HTTPS_PROXY:-}
+      HTTP_PROXY: ${HTTP_PROXY:-}
+      NO_PROXY: ${NO_PROXY:-}
+
 volumes:
   pgdata:
   ollama:
+  hf_cache:

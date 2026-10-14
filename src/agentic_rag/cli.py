@@ -7,20 +7,43 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from agentic_rag.config import get_settings
+from agentic_rag.config import Settings, get_settings
 
 app = typer.Typer(help="Agentic RAG 學習專案的命令列工具", no_args_is_help=True)
 console = Console()
 
+MODE_HELP = "檢索方式：vector 或 hybrid，預設依 .env 的 RAG_RETRIEVAL_MODE"
+RERANK_HELP = "是否使用 Reranker，預設依 .env 的 RAG_RERANKER_URL 是否有值"
+DEFAULT_RERANKER_URL = "http://localhost:8080"
 
-def _pipeline_or_exit():
+
+def _settings(mode: str | None, rerank: bool | None) -> Settings:
+    """命令列參數覆蓋 .env，方便同一份資料比較不同檢索設定。"""
+    s = get_settings()
+    update: dict = {}
+    if mode is not None:
+        if mode not in ("vector", "hybrid"):
+            raise typer.BadParameter("只能是 vector 或 hybrid", param_hint="--mode")
+        update["retrieval_mode"] = mode
+    if rerank is False:
+        update["reranker_url"] = ""
+    elif rerank and not s.reranker_url:
+        update["reranker_url"] = DEFAULT_RERANKER_URL
+    return s.model_copy(update=update)
+
+
+def _pipeline_or_exit(s: Settings):
     """組裝 RAG 管線；Ollama、模型或資料庫有問題時印出原因並結束，而不是卡住。"""
     from agentic_rag.llm import ServiceUnavailable, check_ollama
     from agentic_rag.rag import build_pipeline
+    from agentic_rag.retrieval.rerank import check_reranker
 
-    s = get_settings()
+    rerank = "＋Reranker" if s.reranker_url else ""
+    console.print(f"[dim]檢索方式：{s.retrieval_mode}{rerank}[/dim]")
     try:
         check_ollama(s, [s.embed_model, s.llm_model])
+        if s.reranker_url:
+            check_reranker(s)
         return build_pipeline(s)
     except ServiceUnavailable as exc:
         console.print(f"[red]{exc}[/red]")
@@ -61,17 +84,21 @@ def ingest(path: Path = typer.Argument(Path("data/handbook"), help="要匯入的
 @app.command()
 def ask(
     question: str,
-    current_only: bool = typer.Option(False, "--current-only", help="只查現行版本的文件"),
+    all_versions: bool = typer.Option(
+        False, "--all-versions", help="連已廢止的舊版文件也一起查（預設只查現行版）"
+    ),
+    mode: str | None = typer.Option(None, help=MODE_HELP),
+    rerank: bool | None = typer.Option(None, "--rerank/--no-rerank", help=RERANK_HELP),
 ) -> None:
     """問一個問題，印出答案與引用來源。"""
     from agentic_rag.llm import ServiceUnavailable
 
-    filters = {"status": "現行"} if current_only else None
-    pipeline = _pipeline_or_exit()
-    console.print("[dim]檢索完成，模型生成中（第一次需要載入模型，可能較久）…[/dim]")
-    console.print("\n[bold]答案[/bold]")
+    pipeline = _pipeline_or_exit(_settings(mode, rerank))
     try:
-        answer = pipeline.ask(question, filters, on_token=lambda t: print(t, end="", flush=True))
+        hits = pipeline.retrieve(question, all_versions=all_versions)
+        console.print("[dim]檢索完成，模型生成中（第一次需要載入模型，可能較久）…[/dim]")
+        console.print("\n[bold]答案[/bold]")
+        answer = pipeline.generate(question, hits, on_token=lambda t: print(t, end="", flush=True))
     except ServiceUnavailable as exc:
         console.print(f"\n[red]{exc}[/red]")
         raise typer.Exit(1) from exc
@@ -90,20 +117,21 @@ def run_eval(
     phase: int = typer.Option(1, help="只跑 phase 小於等於此值的題目"),
     generate: bool = typer.Option(True, help="是否也呼叫 LLM 生成答案（較慢）"),
     name: str = typer.Option("", help="結果檔名，預設為時間戳記"),
+    mode: str | None = typer.Option(None, help=MODE_HELP),
+    rerank: bool | None = typer.Option(None, "--rerank/--no-rerank", help=RERANK_HELP),
 ) -> None:
     """跑評估集，把逐題結果寫到 eval/results/。"""
     from agentic_rag.evaluation.runner import evaluate, load_golden, save_report
 
-    s = get_settings()
+    s = _settings(mode, rerank)
     items = load_golden(golden, phase)
     console.print(f"評估 {len(items)} 題，每題完成會印一行…")
     from agentic_rag.llm import ServiceUnavailable
 
     try:
         report = evaluate(
-            _pipeline_or_exit(),
+            _pipeline_or_exit(s),
             items,
-            s.top_k,
             generate,
             on_item=lambda r: console.print(
                 f"  {r.id} hit={r.hit} fact={r.fact_recall} {r.latency_s}s"
