@@ -10,6 +10,31 @@ import httpx
 from agentic_rag.config import Settings
 
 
+class ServiceUnavailable(RuntimeError):
+    """外部服務（Ollama、資料庫）連不上或設定不對，訊息會直接顯示給使用者。"""
+
+
+def check_ollama(settings: Settings, models: list[str]) -> None:
+    """確認 Ollama 有在跑、需要的模型已下載，避免後面卡住或噴出難懂的錯誤。"""
+    try:
+        resp = httpx.get(f"{settings.ollama_url}/api/tags", timeout=5)
+        resp.raise_for_status()
+    except httpx.HTTPError as exc:
+        raise ServiceUnavailable(
+            f"連不上 Ollama（{settings.ollama_url}）。請確認 Ollama 已啟動：{exc}"
+        ) from exc
+    installed = {m["name"] for m in resp.json().get("models", [])}
+    installed |= {name.removesuffix(":latest") for name in installed}
+    missing = [m for m in models if m not in installed]
+    if missing:
+        raise ServiceUnavailable(
+            "Ollama 缺少模型："
+            + "、".join(missing)
+            + "。請先執行 "
+            + "；".join(f"ollama pull {m}" for m in missing)
+        )
+
+
 class ChatModel(Protocol):
     def chat(self, messages: list[dict[str, str]]) -> str: ...
 
