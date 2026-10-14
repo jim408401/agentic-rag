@@ -105,7 +105,9 @@ def run_eval(
             items,
             s.top_k,
             generate,
-            on_item=lambda r: console.print(f"  {r.id} hit={r.hit} {r.latency_s}s"),
+            on_item=lambda r: console.print(
+                f"  {r.id} hit={r.hit} fact={r.fact_recall} {r.latency_s}s"
+            ),
         )
     except ServiceUnavailable as exc:
         console.print(f"[red]{exc}[/red]")

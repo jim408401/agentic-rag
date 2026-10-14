@@ -6,7 +6,14 @@ from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-from agentic_rag.evaluation.metrics import hit_at_k, is_refusal, recall_at_k, reciprocal_rank
+from agentic_rag.evaluation.metrics import (
+    fact_recall,
+    has_citation,
+    hit_at_k,
+    is_refusal,
+    recall_at_k,
+    reciprocal_rank,
+)
 from agentic_rag.generation.prompts import NO_ANSWER
 from agentic_rag.rag import RAGPipeline
 
@@ -19,6 +26,8 @@ class GoldenItem:
     expected_doc_ids: list[str]
     type: str
     phase: int
+    # 答案必須提到的關鍵事實，「|」分隔同義寫法；無答案題留空
+    must_include: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -33,6 +42,8 @@ class ItemResult:
     rr: float | None
     answer: str | None = None
     refusal_correct: float | None = None
+    fact_recall: float | None = None
+    cited: float | None = None
     latency_s: float = 0.0
 
 
@@ -83,6 +94,9 @@ def evaluate(
             refused = is_refusal(answer.text, NO_ANSWER)
             # 無答案題應拒答；有答案題不應拒答
             result.refusal_correct = float(refused != answerable)
+            if answerable:
+                result.fact_recall = fact_recall(answer.text, item.must_include)
+                result.cited = float(has_citation(answer.text))
         result.latency_s = round(time.perf_counter() - start, 3)
         results.append(result)
         if on_item:
@@ -97,6 +111,8 @@ def evaluate(
     }
     if generate:
         summary["refusal_accuracy"] = _mean([r.refusal_correct for r in results])
+        summary["fact_recall"] = _mean([r.fact_recall for r in results])
+        summary["citation_rate"] = _mean([r.cited for r in results])
     return Report(summary=summary, items=results)
 
 
