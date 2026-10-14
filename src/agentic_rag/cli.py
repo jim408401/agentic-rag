@@ -14,7 +14,7 @@ console = Console()
 
 MODE_HELP = "檢索方式：vector 或 hybrid，預設依 .env 的 RAG_RETRIEVAL_MODE"
 RERANK_HELP = "是否使用 Reranker，預設依 .env 的 RAG_RERANKER_URL 是否有值"
-DEFAULT_RERANKER_URL = "http://localhost:8080"
+DEFAULT_RERANKER_URL = "http://localhost:18080"
 
 
 def _settings(mode: str | None, rerank: bool | None) -> Settings:

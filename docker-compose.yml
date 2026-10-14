@@ -39,7 +39,9 @@ services:
     profiles: ["rerank"]
     command: ["--model-id", "BAAI/bge-reranker-v2-m3"]
     ports:
-      - "8080:80"
+      # 8080 常被其他程式占用，改用 18080；仍衝突時設定環境變數 RERANKER_PORT 換埠，
+      # 並把 .env 的 RAG_RERANKER_URL 改成相同的埠
+      - "${RERANKER_PORT:-18080}:80"
     volumes:
       - hf_cache:/data
     environment:
