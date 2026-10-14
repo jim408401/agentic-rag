@@ -13,6 +13,8 @@ from agentic_rag.evaluation.metrics import (
     is_refusal,
     recall_at_k,
     reciprocal_rank,
+    section_recall,
+    section_reciprocal_rank,
 )
 from agentic_rag.generation.prompts import NO_ANSWER
 from agentic_rag.rag import RAGPipeline
@@ -26,6 +28,8 @@ class GoldenItem:
     expected_doc_ids: list[str]
     type: str
     phase: int
+    # 答案所在章節，格式「文件#章節片段」，用來檢查是否取回「對的段落」而不只是對的文件
+    expected_sections: list[str] = field(default_factory=list)
     # 答案必須提到的關鍵事實，「|」分隔同義寫法；無答案題留空
     must_include: list[str] = field(default_factory=list)
 
@@ -40,6 +44,10 @@ class ItemResult:
     hit: float | None
     recall: float | None
     rr: float | None
+    retrieved_sections: list[str] = field(default_factory=list)
+    section_hit: float | None = None
+    section_recall: float | None = None
+    section_rr: float | None = None
     # 前 k 筆中來自已廢止文件的比例（版本題不計）
     obsolete: float | None = None
     answer: str | None = None
@@ -90,6 +98,12 @@ def evaluate(
             recall=recall_at_k(retrieved, item.expected_doc_ids) if answerable else None,
             rr=reciprocal_rank(retrieved, item.expected_doc_ids) if answerable else None,
         )
+        if item.expected_sections:
+            sections = [f"{h.chunk.doc_id}#{h.chunk.section_path}" for h in hits]
+            result.retrieved_sections = sections
+            result.section_recall = section_recall(sections, item.expected_sections)
+            result.section_hit = float(result.section_recall > 0)
+            result.section_rr = section_reciprocal_rank(sections, item.expected_sections)
         if hits and item.type != "version":
             result.obsolete = sum(h.chunk.metadata.get("status") == "已廢止" for h in hits) / len(
                 hits
@@ -113,6 +127,9 @@ def evaluate(
         f"hit@{k}": _mean([r.hit for r in results]),
         f"recall@{k}": _mean([r.recall for r in results]),
         "mrr": _mean([r.rr for r in results]),
+        f"section_hit@{k}": _mean([r.section_hit for r in results]),
+        f"section_recall@{k}": _mean([r.section_recall for r in results]),
+        "section_mrr": _mean([r.section_rr for r in results]),
         f"obsolete@{k}": _mean([r.obsolete for r in results]),
         "avg_latency_s": _mean([r.latency_s for r in results]),
     }

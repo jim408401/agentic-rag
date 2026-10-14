@@ -13,8 +13,10 @@ def test_reingest_does_not_duplicate_chunks(embedder, indexed_store):
 
 
 def test_retrieval_finds_relevant_document(pipeline):
-    hits = pipeline.retriever.retrieve("連續請病假要檢附醫療院所證明嗎", k=3)
-    assert hits[0].chunk.doc_id == "HR-001"
+    hits = pipeline.retriever.retrieve(
+        "連續請病假要檢附醫療院所證明嗎", k=3, filters={"status": "現行"}
+    )
+    assert "HR-001" in {h.chunk.doc_id for h in hits}
 
 
 def test_filter_excludes_obsolete_version(pipeline):

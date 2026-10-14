@@ -34,6 +34,28 @@ def reciprocal_rank(retrieved: list[str], expected: list[str]) -> float:
     return 0.0
 
 
+def section_matches(retrieved: str, expected: str) -> bool:
+    """retrieved 為「文件#章節路徑」，expected 為「文件#章節片段」：同一文件且章節路徑包含該片段。"""
+    r_doc, _, r_path = retrieved.partition("#")
+    e_doc, _, e_part = expected.partition("#")
+    return r_doc == e_doc and e_part in r_path
+
+
+def section_recall(retrieved: list[str], expected: list[str]) -> float:
+    """應找到的章節中，有幾成出現在結果裡。"""
+    if not expected:
+        return 0.0
+    return sum(any(section_matches(r, e) for r in retrieved) for e in expected) / len(expected)
+
+
+def section_reciprocal_rank(retrieved: list[str], expected: list[str]) -> float:
+    """第一個含有答案章節的 chunk 排第 n 名就得 1/n（以 chunk 計名次，不合併同文件）。"""
+    for rank, r in enumerate(retrieved, start=1):
+        if any(section_matches(r, e) for e in expected):
+            return 1.0 / rank
+    return 0.0
+
+
 def is_refusal(answer: str, refusal_phrase: str) -> bool:
     return refusal_phrase in answer
 

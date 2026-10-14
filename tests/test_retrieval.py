@@ -28,7 +28,8 @@ def test_tokenize_mixes_cjk_bigrams_and_words():
 
 def test_bm25_finds_exact_identifiers(indexed_store):
     hits = BM25Retriever(indexed_store).retrieve("24681357", k=3)
-    assert hits[0].chunk.doc_id == "FIN-002"
+    # 現行版與 2024 舊版的差旅辦法都寫了這個統編
+    assert hits[0].chunk.doc_id.startswith("FIN-002")
 
 
 def test_bm25_respects_filters(indexed_store):
@@ -57,7 +58,7 @@ def test_hybrid_retriever(embedder, indexed_store):
     hybrid = HybridRetriever(
         [VectorRetriever(embedder, indexed_store), BM25Retriever(indexed_store)], candidate_k=10
     )
-    hits = hybrid.retrieve("發票統一編號 24681357", k=3)
+    hits = hybrid.retrieve("發票統一編號 24681357", k=3, filters={"status": "現行"})
     assert len(hits) == 3
     assert hits[0].chunk.doc_id == "FIN-002"
 
@@ -129,11 +130,10 @@ def test_infer_filters(question, expected):
 
 
 def test_pipeline_hides_obsolete_versions_unless_asked(embedder, indexed_store):
-    pipe = RAGPipeline(
-        VectorRetriever(embedder, indexed_store), EchoChat(), top_k=10, version_filter=True
-    )
+    pipe = RAGPipeline(BM25Retriever(indexed_store), EchoChat(), top_k=10, version_filter=True)
     current = {h.chunk.doc_id for h in pipe.retrieve("特休可以遞延嗎")}
-    assert "HR-001" in current and "HR-001-2023" not in current
+    assert "HR-001" in current
+    assert not {"HR-001-2021", "HR-001-2023"} & current
     assert "HR-001-2023" in {h.chunk.doc_id for h in pipe.retrieve("2023 年特休可以遞延嗎")}
     assert "HR-001-2023" in {
         h.chunk.doc_id for h in pipe.retrieve("特休可以遞延嗎", all_versions=True)

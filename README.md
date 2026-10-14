@@ -8,7 +8,7 @@
 
 | 階段 | 內容 | 狀態 |
 | --- | --- | --- |
-| Phase 0 | 評估集 `eval/golden.jsonl`（29 題，含無答案題、版本題、SQL 題），檢索與答案正確性指標 | 完成 |
+| Phase 0 | 評估集 `eval/golden.jsonl`（77 題，含換句話說、硬干擾、無答案、版本、SQL 題），檢索與答案正確性指標 | 完成 |
 | Phase 1 | Naive RAG：Markdown 匯入、標題分節 + 固定長度切塊、pgvector 向量檢索、帶引用的生成、FastAPI、CLI、評估腳本 | 完成 |
 | Phase 2 | Hybrid（BM25 + RRF）、Reranker、版本過濾 | 完成 |
 | Phase 2 | Query Rewriting、Semantic / Parent-Child Chunking、RAGAS | 待做 |
@@ -51,12 +51,12 @@ uv run uvicorn agentic_rag.api.main:app --reload   # http://localhost:8000/docs
 `ask` 與 `eval` 都可以用參數臨時覆蓋 `.env`，同一份資料比較三種設定：
 
 ```bash
-uv run rag eval --phase 2 --mode vector --no-rerank --name vector
-uv run rag eval --phase 2 --mode hybrid --no-rerank --name hybrid
+uv run rag eval --phase 2 --no-generate --mode vector --no-rerank --name vector
+uv run rag eval --phase 2 --no-generate --mode hybrid --no-rerank --name hybrid
 
 docker compose --profile rerank up -d reranker   # 第一次會下載約 2 GB 模型
 docker compose logs -f reranker                  # 看到 Ready 後再繼續
-uv run rag eval --phase 2 --mode hybrid --rerank --name hybrid-rerank
+uv run rag eval --phase 2 --no-generate --mode hybrid --rerank --name hybrid-rerank
 ```
 
 一般問題預設只查現行版本；問題提到年份（例如「2023 年」）或「舊版、以前」時，才會連已廢止的版本一起查（`src/agentic_rag/retrieval/query.py`）。
@@ -96,7 +96,10 @@ eval/golden.jsonl    評估集
 ## 模擬資料
 
 - **規章手冊**：請假（含 2023 舊版）、差旅報支、資訊安全、客戶退換貨、採購，每份有 `doc_id`、版本、生效日、狀態、權限群組等 front matter。
-- **干擾文件**：加班補休、福利補助、帳號權限、公務車。內容和上面的規章用詞相近（補休與特休、喪葬補助與喪假、帳號與密碼、公務車油資與自行開車油資），用來測試檢索會不會抓錯文件。
+- **干擾文件**：共 33 份文件、約 390 個 chunk，大多數是故意和主規章撞詞的干擾項，用來拉開不同檢索方式的差距：
+  - **對象不同**：約聘派遣、工廠作業員、海外派駐、子公司、經銷商各有一套數字不同的規定。
+  - **多版本並存**：請假辦法有 2021、2023 與現行三版；差旅辦法、資安政策也各有舊版。
+  - **主題相鄰**：內部餐敘與客戶交際費、零用金與採購、保固與瑕疵換貨、稽核分數與年度評鑑。
 - **訂單資料庫**：`sales` schema 下的客戶、商品、訂單、訂單明細。退換貨規範中的退貨期限依客戶等級而定，Phase 3 的 Agent 需要同時查文件與 SQL 才能回答「這張訂單還能不能退」。
 
 ## 評估集題型
@@ -104,6 +107,10 @@ eval/golden.jsonl    評估集
 | 題型 | 說明 | 階段 |
 | --- | --- | --- |
 | fact / multi / reasoning | 單一事實、多個條件、需要推論 | 1 |
+| paraphrase | 口語、換句話說，刻意避開文件用詞 | 1 |
+| lookup | 表單代碼、分機、系統路徑等字面精確的資訊 | 1 |
+| hard_negative | 題目指定特定對象，答案在干擾文件或必須排除干擾文件 | 1 |
+| multi_doc | 需要兩份文件的資訊 | 1 |
 | unanswerable | 文件中沒有答案，應回覆「查無相關規定」 | 1 |
 | version | 需區分現行版與廢止版 | 2 |
 | sql / sql+doc | 需要查訂單資料庫，或同時查文件與資料庫 | 3 |
@@ -113,10 +120,13 @@ eval/golden.jsonl    評估集
 | 指標 | 意義 |
 | --- | --- |
 | hit@k / recall@k | 正確文件有沒有出現在前 k 筆 |
+| section_hit@k / section_recall@k / section_mrr | 同上，但以「答案所在章節」（`expected_sections`）判斷；文件對了但段落不對不算命中 |
 | mrr | 正確文件排第幾名（第 1 名得 1，第 2 名得 0.5…），Reranker 主要改善這項 |
 | obsolete@k | 前 k 筆中來自已廢止文件的比例（版本題不計），越低越好 |
 | refusal_accuracy | 無答案題有拒答、有答案題沒有亂拒答 |
 | fact_recall | 答案涵蓋了幾成關鍵事實（`must_include`，「\|」分隔同義寫法，比對時忽略空白、逗號與全半形） |
 | citation_rate | 有答案的題目中，答案附上 `[n]` 引用的比例 |
+
+比較檢索方式時加上 `--no-generate`，只跑檢索、結果固定，幾秒內完成。
 
 `fact_recall` 是關鍵字比對，便宜又穩定，但可能漏判換句話說的正確答案。Phase 2 會再加上 LLM 評分（RAGAS）互相對照。
