@@ -4,10 +4,21 @@
 """
 
 from typing import Protocol
+from urllib.parse import urlparse
 
 import httpx
 
 from agentic_rag.config import Settings
+
+LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
+
+
+def use_env_proxy(url: str) -> bool:
+    """連本機服務時不走 HTTP_PROXY。
+
+    公司電腦常設定 HTTP_PROXY，httpx 預設會照用，連 localhost 也送去公司 proxy 而被擋（403）。
+    """
+    return urlparse(url).hostname not in LOCAL_HOSTS
 
 
 class ServiceUnavailable(RuntimeError):
@@ -17,7 +28,11 @@ class ServiceUnavailable(RuntimeError):
 def check_ollama(settings: Settings, models: list[str]) -> None:
     """確認 Ollama 有在跑、需要的模型已下載，避免後面卡住或噴出難懂的錯誤。"""
     try:
-        resp = httpx.get(f"{settings.ollama_url}/api/tags", timeout=5)
+        resp = httpx.get(
+            f"{settings.ollama_url}/api/tags",
+            timeout=5,
+            trust_env=use_env_proxy(settings.ollama_url),
+        )
         resp.raise_for_status()
     except httpx.HTTPError as exc:
         raise ServiceUnavailable(
@@ -50,7 +65,9 @@ class OllamaChat:
         self.model = settings.llm_model
         self.temperature = settings.llm_temperature
         self._client = client or httpx.Client(
-            base_url=settings.ollama_url, timeout=settings.request_timeout
+            base_url=settings.ollama_url,
+            timeout=settings.request_timeout,
+            trust_env=use_env_proxy(settings.ollama_url),
         )
 
     def chat(self, messages: list[dict[str, str]]) -> str:
@@ -75,7 +92,9 @@ class OllamaEmbedder:
         self.dim = settings.embed_dim
         self.batch_size = batch_size
         self._client = client or httpx.Client(
-            base_url=settings.ollama_url, timeout=settings.request_timeout
+            base_url=settings.ollama_url,
+            timeout=settings.request_timeout,
+            trust_env=use_env_proxy(settings.ollama_url),
         )
 
     def embed(self, texts: list[str]) -> list[list[float]]:
